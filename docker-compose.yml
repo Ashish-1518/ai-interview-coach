@@ -1,0 +1,34 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: ai_interview_coach_db
+    environment:
+      POSTGRES_DB: interview_coach
+      POSTGRES_USER: interview_coach
+      POSTGRES_PASSWORD: interview_coach_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U interview_coach -d interview_coach"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+    container_name: ai_interview_coach_backend
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://interview_coach:interview_coach_password@db:5432/interview_coach
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:

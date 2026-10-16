@@ -1,0 +1,62 @@
+# Production docker-compose — runs the full stack behind Nginx.
+#
+# Usage:
+#   cp .env.production.example .env   # fill in real values
+#   docker-compose -f docker-compose.prod.yml up --build -d
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: ai_interview_coach_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: interview_coach
+      POSTGRES_USER: interview_coach
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-interview_coach_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U interview_coach -d interview_coach"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+    container_name: ai_interview_coach_backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://interview_coach:${POSTGRES_PASSWORD:-interview_coach_password}@db:5432/interview_coach
+      APP_ENV: production
+      APP_DEBUG: "false"
+    volumes:
+      - backend_storage:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: ai_interview_coach_frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  backend_storage:
